@@ -1,0 +1,24 @@
+version: '3'
+services:
+  microService:
+    image: zzyy_docker:1.6
+    container_name: ms01
+    ports:
+      - '6001:6001'
+    volumes:
+      - /app/microService:/data
+    networks:
+      - atguigu_net
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:6.0.8
+    ports:
+      - '6379:6379'
+    volumes:
+      - /app/redis/redis.conf:/etc/redis/redis.conf
+      - /app/redis/data:/data
+    networks:
+      - atguigu_net
+    command: redis-server /etc/redis/redis.conf

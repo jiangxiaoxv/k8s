@@ -184,4 +184,187 @@
 
         - docker rm -f t1
 
-二、docker 高级篇
+二、docker 高级篇(docker 与 微服务)
+
+1. Docker 复杂安装详述
+2. 开启集群
+
+   - docker run -d --name redis-node-1 --net host --privileged=true -v /data/redis/share/redis-node-1:/data redis:6.0.8 --cluster-enabled yes --appendonly yes --port 6381
+     --cluster-enabled yes // 是否开启 redis 集群
+     --appendonly yes // 开启持久化
+
+   - docker run -d --name redis-node-2 --net host --privileged=true -v /data/redis/share/redis-node-2:/data redis:6.0.8 --cluster-enabled yes --appendonly yes --port 6382
+
+3. 主从机器，容器
+
+   - docer exec -it redis-node-1 /bin/bash
+   - redis-cli --cluster create 192.168.111.147:6381 192.168.111.147:6382 192.168.111.147:6383 192.168.111.147:6384 192.168.111.147:6385 192.168.111.147:6386 --cluster-replicas 1
+   - --cluster-replicas 1 表示为每个 master 创建一个 slave 节点
+
+4. 集群内查看节点状态
+
+   - cluster info
+   - cluser nodes
+   -
+
+三、 dockerfile
+
+1.  是什么
+    是用来构建 Docker 镜像的文本文件，是由一条条构建镜像所需的指令和参数构成的脚本。
+    - 写 dockerfile
+    - docker build 构建镜像
+    - docker run 依据镜像运行容器实例
+2.  dockerfile 构建过程
+
+    - 每条保留字指令都必须为大写字母且后面要跟随至少一个参数
+    - 指令按照从上到下，顺序执行
+    - \# 表示注解
+    - 每条指令都会创建一个新的镜像层并对镜像进行提交
+
+      2.1 Docker 执行 Dockerfile 的大致流程
+
+            - docker从基础镜像运行一个容器
+            - 执行一条指令并对容器作出修改
+            - 执行类似docker commit的操作提交一个新的镜像层
+            - docker再基于刚提交的镜像运行一个新容器
+            - 执行dockerfile中的下一条指令直到所有指令都执行完成
+
+      2.2 常用保留字指令
+
+            - FROM 基础镜像，当前新镜像是基于那个镜像的，制定一个已经存在的镜像作为模版
+            - MAINTAINER 镜像维护者的姓名和邮箱地址
+            - RUN 可以执行shell命令;RUN是在 docker build时运行。
+            - EXPOSE 当前容器对外暴漏出的端口
+            - WORKDIR 指定在创建容器后，终端默认登录的进来工作目录，一个落脚点
+            - USER 指定该镜像以什么样的用户去执行，如果都不指定，默认是root
+            - ENV 用来在构建镜像过程中设置环境变量
+            - ADD 将宿主机目录下的文件拷贝镜像且会自动处理URL和解压tar压缩包
+            - COPY 类似ADD，拷贝文件和目录到镜像中；将从构建上下文目录<源路径>的文件/目录复制到新的一层镜像内的<目标路径>位置
+            - VOLUME 容器卷,用于数据持久化 -v
+            - CMD 指定容器启动后要干的事情；CMD ['shell', 'param1']; Dockerfile 中可以有多个 CMD 指令，但只有最后一个生效，CMD 会被 docker run 之后的参数替换; CMD是在docker run 时运行
+
+            - ENTRYPOINT 也是用来指定一个容器启动时要运行的命令;类似于 CMD 指令，但是ENTRYPOINT不会被docker run后面的命令覆盖， 而且这些命令行参数会被当作参数送给 ENTRYPOINT 指令指定的程序 (entrypoint)
+
+3.  构建
+
+    - docker build -t 新镜像名字:TAG
+    - docker build -t centosjava8:0.1 .
+
+4.  虚悬镜像
+
+    - 仓库名、标签都是<none>的镜像，俗称 dangling image
+    - 产看所有虚悬镜像 docker image ls -f dangling=true
+    - docker image prune(修剪，裁剪)
+
+四、Docker 网络
+
+Docker 服务默认会创建一个 docker0 网桥（其上有一个 docker0 内部接口），该桥接网络的名称为 docker0，它在内核层连通了其他的物理或虚拟网卡，这就将所有容器和本地主机都放到同一个物理网络。Docker 默认指定了 docker0 接口的 ip 地址和子网掩码，让主机和容器之间可以通过网桥相互通信
+
+    默认创建 3 大网络模式
+    docker network ls 就可以查看网络
+    docker network COMMAND
+    docker网络管理和容器调用之间的规划
+    Docker
+
+1.  常用命令
+
+    - docker network ls
+    - docker network inspect 网络名字
+    - docker network rm 网络名字
+    - docker inspect 容器名字
+    - docker inspect u1 | tail -n 20
+    - docker network create aa_network
+    -
+
+2.  容器间的互联和通信以及端口映射；容器 ip 变动时候可以通过服务名直接网络通信而不受影响
+3.  网络模式
+
+    3.1 bridge
+
+        - 为每一个容器分配、设置ip等，并将容器连接到一个 docker0 虚拟网桥，默认为该模式
+
+    3.2 host
+
+        - 容器将不会虚拟出自己的网卡，配置自己的ip等，而是使用宿主机的ip和端口
+
+    3.3 none - 容器有独立的 network namespace，但并没有对其进行任何网络设置，如分配 veth pair 和网桥连接，ip 等
+
+    3.4 container 新创建的容器不会创建自己的网卡和配置自己的 ip，而是和一个指定的容器共享 ip，端口范围
+
+4.  容器实例内默认网络 ip 生成规则
+
+        - docker 容器内部的 ip 是会发生变化的
+        - 查看 bridge 网络的详细信息，并通过 grep 获取名称项 ; docker network inspect bridge | grep name
+        - Docker 使用 Linux 桥接，在宿主机虚拟一个 Docker 容器网桥(docker0)，Docker 启动一个容器时会根据 Docker 网桥的网段分配给容器一个 IP 地址，称为 Container-IP，同时 Docker 网桥是每个容器的默认网关。因为在同一宿主机内的容器都接入同一个网桥，这样容器之间就能够通过容器的 Container-IP 直接通信。
+
+          4.1 bridge
+
+              - docker run 的时候，没有指定 network 的话默认使用的网桥模式就是 bridge，使用的就是 docker0。在宿主机 ifconfig,就可以看到 docker0 和自己 create 的 network(后面讲)eth0，eth1，eth2……代表网卡一，网卡二，网卡三……，lo 代表 127.0.0.1，即 localhost，inet addr 用来表示网卡的 IP 地址
+              - 网桥 docker0 创建一对对等虚拟设备接口一个叫 veth，另一个叫 eth0，成对匹配。
+              - 整个宿主机的网桥模式都是 docker0，类似一个交换机有一堆接口，每个接口叫 veth，在本地主机和容器内分别创建一个虚拟接口，并让他们彼此联通（这样一对接口叫 veth pair）；
+              - 每个容器实例内部也有一块网卡，每个接口叫 eth0； - docker0 上面的每个 veth 匹配某个容器实例内部的 eth0，两两配对，一一匹配。
+
+          4.2 host
+
+              - docker run -d --network host --name tomcat83 tomcat
+
+          4.3 none
+          4.4 container
+          4.5 自定义网络
+
+五、 Docker-compose 容器编排
+
+是什么：
+
+- Compose 是 Docker 公司推出的一个工具软件，可以管理多个 Docker 容器组成一个应用。你需要定义一个 YAML 格式的配置文件 docker-compose.yml，写好多个容器之间的调用关系。然后，只要一个命令，就能同时启动/关闭这些容器
+
+- Docker-Compose 是 Docker 官方的开源项目， 负责实现对 Docker 容器集群的快速编排
+
+能干什么：
+
+- docker 建议我们每一个容器中只运行一个服务,因为 docker 容器本身占用资源极少,所以最好是将每个服务单独的分割开来但是这样我们又面临了一个问题？
+
+- 如果我需要同时部署好多个服务,难道要每个服务单独写 Dockerfile 然后在构建镜像,构建容器,这样累都累死了,所以 docker 官方给我们提供了 docker-compose 多服务部署的工具
+
+- Compose 允许用户通过一个单独的 docker-compose.yml 模板文件（YAML 格式）来定义一组相关联的应用容器为一个项目（project）。
+- 可以很容易地用一个配置文件定义一个多容器的应用，然后使用一条指令安装这个应用的所有依赖，完成构建。Docker-Compose 解决了容器与容器之间如何管理编排的问题。
+
+1.  compose 核心概念
+
+    - 一文件 docker-compose.yml
+    - 两要素
+      - 服务（service）：一个个应用容器实例
+      - 工程（project）：多个服务（容器应用实例）；由一组关联的应用容器组成的一个完整业务单元，在 docker-compose.yml 文件中定义
+
+2.  使用的三个步骤
+
+    - 编写 Dockerfile 定义各个微服务应用并构建出对应的镜像文件
+    - 使用 docker-compose.yml 定义一个完整业务单元，安排好整体应用中的各个容器服务。
+    - 最后，执行 docker-compose up 命令 来启动并运行整个应用程序，完成一键部署上线
+
+3.  docker-compose 常用命令
+
+    - docker-compose -h                           # 查看帮助
+    - docker-compose up                           # 启动所有
+    - docker-compose 服务
+    - docker-compose up -d                        # 启动所有 docker-compose 服务并后台运行
+    - docker-compose down                         # 停止并删除容器、网络、卷、镜像。
+    - docker-compose exec  yml 里面的服务 id                 # 进入容器实例内部   docker-compose exec docker-compose.yml 文件中写的服务 id /bin/bash
+    - docker-compose ps                      # 展示当前 docker-compose 编排过的运行的所有容器
+    - docker-compose top                     # 展示当前 docker-compose 编排过的容器进程
+    - docker-compose logs  yml 里面的服务 id     # 查看容器输出日志
+    - docker-compose config     # 检查配置
+    - docker-compose config -q  # 检查配置，有问题才有输出
+    - docker-compose restart   # 重启服务
+    - docker-compose start     # 启动服务
+    - docker-compose stop      # 停止服务
+
+    docker-compose config -q # 文件语法格式检查
+
+六、Portainer 简介与安装
+
+1. docker 可视化工具
+2. cadvisor
+3. influxDb
+4. granfana
+5. compose 容器编排；cadvisor，influxDb,granfana
