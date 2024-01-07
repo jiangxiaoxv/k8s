@@ -1,0 +1,4 @@
+kubectl get nodes
+kubectl get pods --namespace=development
+kubectl crate -f p1.yaml
+kubectl get endpoints
